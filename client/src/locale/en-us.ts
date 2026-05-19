@@ -55,6 +55,9 @@ export const controls = {
   mic_on: 'Enable Microphone',
   mic_off: 'Disable Microphone',
   mic_error: 'Microphone Error',
+  webcam_on: 'Enable Webcam',
+  webcam_off: 'Disable Webcam',
+  webcam_error: 'Webcam Error',
 }
 
 export const locks = {

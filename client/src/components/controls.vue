@@ -1,6 +1,6 @@
 <template>
   <ul>
-    <li v-if="!implicitHosting && (!controlLocked || hosting)">
+    <li v-if="!mediaOnly && !implicitHosting && (!controlLocked || hosting)">
       <i
         :class="[
           !disabeld && shakeKbd ? 'shake' : '',
@@ -20,7 +20,7 @@
         @click.stop.prevent="toggleControl"
       />
     </li>
-    <li class="no-pointer" v-if="implicitHosting">
+    <li class="no-pointer" v-if="!mediaOnly && implicitHosting">
       <i
         :class="[controlLocked ? 'disabled' : '', 'fas', 'fa-mouse-pointer']"
         v-tooltip="{
@@ -32,7 +32,7 @@
         }"
       />
     </li>
-    <li v-if="implicitHosting || (!implicitHosting && (!controlLocked || hosting))">
+    <li v-if="!mediaOnly && (implicitHosting || (!implicitHosting && (!controlLocked || hosting)))">
       <label
         class="switch"
         v-tooltip="{
@@ -47,7 +47,7 @@
         <span />
       </label>
     </li>
-    <li>
+    <li v-if="!mediaOnly">
       <i
         :class="[{ disabled: !playable }, playing ? 'fa-pause-circle' : 'fa-play-circle', 'fas', 'play']"
         @click.stop.prevent="toggleMedia"
@@ -71,7 +71,25 @@
         @click.stop.prevent="toggleMicrophone"
       />
     </li>
-    <li>
+    <li v-if="webcamAllowed">
+      <i
+        :class="[
+          { disabled: !playable },
+          webcamActive ? 'fa-video' : 'fa-video-slash',
+          webcamActive ? '' : 'faded',
+          'fas',
+        ]"
+        v-tooltip="{
+          content: webcamActive ? $t('controls.webcam_off') : $t('controls.webcam_on'),
+          placement: 'top',
+          offset: 5,
+          boundariesElement: 'body',
+          delay: { show: 300, hide: 100 },
+        }"
+        @click.stop.prevent="toggleWebcam"
+      />
+    </li>
+    <li v-if="!mediaOnly">
       <div class="volume">
         <i
           :class="[volume === 0 || muted ? 'fa-volume-mute' : 'fa-volume-up', 'fas']"
@@ -271,10 +289,12 @@
 
 <script lang="ts">
   import { Vue, Component, Prop, Watch } from 'vue-property-decorator'
+  import { EVENT } from '~/neko/events'
 
   @Component({ name: 'neko-controls' })
   export default class extends Vue {
     @Prop(Boolean) readonly shakeKbd!: boolean
+    @Prop(Boolean) readonly mediaOnly!: boolean
 
     get controlLocked() {
       return 'control' in this.$accessor.locked && this.$accessor.locked['control'] && !this.$accessor.user.admin
@@ -303,6 +323,10 @@
     // microphone simultaneously — only the person in control can.
     get micAllowed() {
       return this.controlling
+    }
+
+    get webcamAllowed() {
+      return this.$accessor.connected
     }
 
     get volume() {
@@ -352,16 +376,25 @@
     }
 
     microphoneActive = false
+    webcamActive = false
 
     // Auto-disable microphone when the user loses control (e.g. another user
-    // takes host, or admin releases control). This ensures the mic track is
-    // cleaned up and the server-side audio input is freed for the new host.
+    // takes host, or admin releases control). Webcam sharing is intentionally
+    // independent so one participant can control while another provides camera.
     @Watch('controlling')
     onControllingChanged(isControlling: boolean) {
       if (!isControlling && this.microphoneActive) {
         this.$client.disableMicrophone()
         this.microphoneActive = false
+        this.logMediaChange('disabled microphone')
       }
+    }
+
+    logMediaChange(content: string) {
+      if (!this.$accessor.connected) {
+        return
+      }
+      this.$client.sendMessage(EVENT.CHAT.MESSAGE, { content })
     }
 
     async toggleMicrophone() {
@@ -372,13 +405,39 @@
       if (this.microphoneActive) {
         this.$client.disableMicrophone()
         this.microphoneActive = false
+        this.logMediaChange('disabled microphone')
       } else {
         try {
           await this.$client.enableMicrophone()
           this.microphoneActive = true
+          this.logMediaChange('enabled microphone')
         } catch (err: any) {
           this.$swal({
             title: this.$t('controls.mic_error') as string,
+            text: err.message,
+            icon: 'error',
+          })
+        }
+      }
+    }
+
+    async toggleWebcam() {
+      if (!this.playable || !this.webcamAllowed) {
+        return
+      }
+
+      if (this.webcamActive) {
+        this.$client.disableWebcam()
+        this.webcamActive = false
+        this.logMediaChange('disabled camera')
+      } else {
+        try {
+          await this.$client.enableWebcam()
+          this.webcamActive = true
+          this.logMediaChange('enabled camera')
+        } catch (err: any) {
+          this.$swal({
+            title: this.$t('controls.webcam_error') as string,
             text: err.message,
             icon: 'error',
           })

@@ -31,6 +31,9 @@ export abstract class BaseClient extends EventEmitter<BaseEvents> {
   protected _micStream?: MediaStream
   protected _micSender?: RTCRtpSender
   protected _micActive = false
+  protected _webcamStream?: MediaStream
+  protected _webcamSender?: RTCRtpSender
+  protected _webcamActive = false
 
   get id() {
     return this._id
@@ -132,6 +135,7 @@ export abstract class BaseClient extends EventEmitter<BaseEvents> {
     }
 
     this.disableMicrophone()
+    this.disableWebcam()
 
     this._state = 'disconnected'
     this._displayname = undefined
@@ -140,6 +144,10 @@ export abstract class BaseClient extends EventEmitter<BaseEvents> {
 
   get microphoneActive() {
     return this._micActive
+  }
+
+  get webcamActive() {
+    return this._webcamActive
   }
 
   public async enableMicrophone(): Promise<void> {
@@ -182,6 +190,50 @@ export abstract class BaseClient extends EventEmitter<BaseEvents> {
 
     this._micActive = false
     this.emit('info', 'microphone disabled')
+  }
+
+  public async enableWebcam(): Promise<void> {
+    if (!this._peer) {
+      this.emit('warn', 'attempting to enable webcam with no peer connection')
+      return
+    }
+
+    if (this._webcamActive) {
+      this.emit('debug', 'webcam already active')
+      return
+    }
+
+    try {
+      this._webcamStream = await navigator.mediaDevices.getUserMedia({ video: true })
+      const videoTrack = this._webcamStream.getVideoTracks()[0]
+      this._webcamSender = this._peer.addTrack(videoTrack, this._webcamStream)
+      this._webcamActive = true
+      this.emit('info', `webcam enabled: ${videoTrack.label}`)
+    } catch (err: any) {
+      this.emit('error', err)
+      throw err
+    }
+  }
+
+  public disableWebcam(): void {
+    if (this._webcamSender) {
+      if (this._peer) {
+        try {
+          this._peer.removeTrack(this._webcamSender)
+        } catch (err) {
+          this.emit('warn', 'failed to remove webcam track from peer', err)
+        }
+      }
+      this._webcamSender = undefined
+    }
+
+    if (this._webcamStream) {
+      this._webcamStream.getTracks().forEach((t) => t.stop())
+      this._webcamStream = undefined
+    }
+
+    this._webcamActive = false
+    this.emit('info', 'webcam disabled')
   }
 
   public sendData(event: 'wheel' | 'mousemove', data: { x: number; y: number }): void

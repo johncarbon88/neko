@@ -1,0 +1,101 @@
+name: Build Webcam Chrome Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Image tag to apply to the webcam Chrome image.
+        required: true
+        type: string
+        default: webcam
+      push:
+        description: Push the built images to GitHub Container Registry.
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build Webcam Google Chrome
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE_TAG: ${{ inputs.tag }}
+      PUSH_IMAGE: ${{ inputs.push }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Normalize image namespace
+        run: echo "IMAGE_NAMESPACE=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: utils/docker/go.mod
+          cache-dependency-path: utils/docker/go.mod
+
+      - name: Log in to GitHub Container Registry
+        if: ${{ inputs.push }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build client
+        working-directory: ./client
+        run: |
+          npm ci
+          npm run build
+
+      - name: Generate base Dockerfile
+        run: go run utils/docker/main.go -i Dockerfile.tmpl -o Dockerfile -client client/dist
+
+      - name: Build webcam base image
+        run: |
+          docker build \
+            --tag "ghcr.io/${IMAGE_NAMESPACE}/webcam-base:${IMAGE_TAG}" \
+            --tag "ghcr.io/${IMAGE_NAMESPACE}/webcam-base:sha-${GITHUB_SHA}" \
+            .
+
+      - name: Build webcam Google Chrome image
+        run: |
+          docker build \
+            --build-arg "BASE_IMAGE=ghcr.io/${IMAGE_NAMESPACE}/webcam-base:${IMAGE_TAG}" \
+            --tag "ghcr.io/${IMAGE_NAMESPACE}/webcam-google-chrome:${IMAGE_TAG}" \
+            --tag "ghcr.io/${IMAGE_NAMESPACE}/webcam-google-chrome:sha-${GITHUB_SHA}" \
+            apps/google-chrome
+
+      - name: Push images
+        if: ${{ inputs.push }}
+        run: |
+          docker push "ghcr.io/${IMAGE_NAMESPACE}/webcam-base:${IMAGE_TAG}"
+          docker push "ghcr.io/${IMAGE_NAMESPACE}/webcam-base:sha-${GITHUB_SHA}"
+          docker push "ghcr.io/${IMAGE_NAMESPACE}/webcam-google-chrome:${IMAGE_TAG}"
+          docker push "ghcr.io/${IMAGE_NAMESPACE}/webcam-google-chrome:sha-${GITHUB_SHA}"
+
+      - name: Write job summary
+        run: |
+          {
+            echo "## Webcam Chrome image"
+            echo
+            echo "- Base image: \`ghcr.io/${IMAGE_NAMESPACE}/webcam-base:${IMAGE_TAG}\`"
+            echo "- Chrome image: \`ghcr.io/${IMAGE_NAMESPACE}/webcam-google-chrome:${IMAGE_TAG}\`"
+            echo "- SHA tag: \`sha-${GITHUB_SHA}\`"
+            echo "- Pushed: \`${PUSH_IMAGE}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

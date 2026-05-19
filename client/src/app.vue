@@ -15,6 +15,9 @@
             :extraControls="isEmbedMode"
             @control-attempt="controlAttempt"
           />
+          <div v-if="!videoOnly" class="mobile-media-controls">
+            <neko-controls :shakeKbd="shakeKbd" :mediaOnly="true" />
+          </div>
         </div>
         <div v-if="!videoOnly" class="room-container">
           <neko-members />
@@ -77,6 +80,11 @@
         max-width: 100%;
         flex-grow: 1;
         display: flex;
+        position: relative;
+
+        .mobile-media-controls {
+          display: none;
+        }
       }
 
       .room-container {
@@ -163,6 +171,22 @@
   @media only screen and (max-width: 768px) {
     #neko .neko-main .room-container {
       display: none;
+    }
+
+    #neko .neko-main .video-container .mobile-media-controls {
+      position: absolute;
+      left: 50%;
+      top: 12px;
+      z-index: 10;
+      display: flex;
+      min-height: 44px;
+      padding: 8px 10px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 22px;
+      background: rgba($background-floating, 0.82);
+      box-shadow: $elevation-high;
+      transform: translateX(-50%);
     }
   }
 </style>
