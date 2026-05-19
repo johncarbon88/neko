@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Webcam Diagnostics</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        background: #111318;
+        color: #f4f7fb;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      main {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 28px 0 40px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        line-height: 1.2;
+      }
+
+      p {
+        margin: 0 0 18px;
+        color: #b9c3d1;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 18px 0 20px;
+      }
+
+      button,
+      select {
+        border: 1px solid #374151;
+        border-radius: 8px;
+        background: #1f2937;
+        color: #f9fafb;
+        padding: 10px 12px;
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #2b3646;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 16px;
+      }
+
+      .panel {
+        border: 1px solid #273244;
+        border-radius: 8px;
+        background: #171b24;
+        overflow: hidden;
+      }
+
+      .panel h2 {
+        margin: 0;
+        border-bottom: 1px solid #273244;
+        padding: 12px 14px;
+        font-size: 15px;
+        letter-spacing: 0;
+      }
+
+      .panel-body {
+        padding: 14px;
+      }
+
+      video {
+        display: block;
+        width: 100%;
+        max-height: 520px;
+        border-radius: 6px;
+        background: #05070a;
+        object-fit: contain;
+      }
+
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: #dbeafe;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .status {
+        margin: 0 0 14px;
+        color: #93c5fd;
+        font-size: 14px;
+      }
+
+      .error {
+        color: #fca5a5;
+      }
+
+      @media (max-width: 820px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Webcam Diagnostics</h1>
+      <p>
+        Shows the camera information available to normal website JavaScript:
+        device enumeration, selected track settings, capabilities, constraints,
+        browser metadata, and observed preview FPS.
+      </p>
+
+      <div class="toolbar">
+        <button id="refresh">Refresh Devices</button>
+        <button id="start">Request Camera</button>
+        <button id="stop">Stop Camera</button>
+        <button id="copy">Copy Report JSON</button>
+        <select id="device"></select>
+      </div>
+
+      <p id="status" class="status">Idle.</p>
+
+      <div class="grid">
+        <section class="panel">
+          <h2>Preview</h2>
+          <div class="panel-body">
+            <video id="preview" autoplay muted playsinline></video>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Summary</h2>
+          <div class="panel-body">
+            <pre id="summary">{}</pre>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Devices</h2>
+          <div class="panel-body">
+            <pre id="devices">[]</pre>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Track</h2>
+          <div class="panel-body">
+            <pre id="track">{}</pre>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Browser</h2>
+          <div class="panel-body">
+            <pre id="browser">{}</pre>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Full Report</h2>
+          <div class="panel-body">
+            <pre id="report">{}</pre>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const state = {
+        stream: null,
+        track: null,
+        devices: [],
+        observedFrames: 0,
+        observedStartedAt: 0,
+        observedFps: null,
+        lastReport: {},
+      };
+
+      const els = {
+        browser: document.querySelector("#browser"),
+        copy: document.querySelector("#copy"),
+        device: document.querySelector("#device"),
+        devices: document.querySelector("#devices"),
+        preview: document.querySelector("#preview"),
+        refresh: document.querySelector("#refresh"),
+        report: document.querySelector("#report"),
+        start: document.querySelector("#start"),
+        status: document.querySelector("#status"),
+        stop: document.querySelector("#stop"),
+        summary: document.querySelector("#summary"),
+        track: document.querySelector("#track"),
+      };
+
+      function plain(value) {
+        if (value == null || typeof value !== "object") {
+          return value;
+        }
+
+        if (Array.isArray(value)) {
+          return value.map(plain);
+        }
+
+        return Object.fromEntries(
+          Object.entries(value).map(([key, val]) => [key, plain(val)]),
+        );
+      }
+
+      function writeJson(element, value) {
+        element.textContent = JSON.stringify(value, null, 2);
+      }
+
+      function setStatus(message, isError = false) {
+        els.status.textContent = message;
+        els.status.classList.toggle("error", isError);
+      }
+
+      async function getPermissionState(name) {
+        if (!navigator.permissions?.query) {
+          return "unsupported";
+        }
+
+        try {
+          const status = await navigator.permissions.query({ name });
+          return status.state;
+        } catch (error) {
+          return `unavailable: ${error.name || error.message}`;
+        }
+      }
+
+      async function collectBrowserInfo() {
+        return {
+          location: location.href,
+          isSecureContext,
+          userAgent: navigator.userAgent,
+          platform: navigator.platform,
+          language: navigator.language,
+          languages: navigator.languages,
+          hardwareConcurrency: navigator.hardwareConcurrency,
+          deviceMemory: navigator.deviceMemory,
+          maxTouchPoints: navigator.maxTouchPoints,
+          mediaDevicesAvailable: Boolean(navigator.mediaDevices),
+          supportedConstraints:
+            navigator.mediaDevices?.getSupportedConstraints?.() || null,
+          permissions: {
+            camera: await getPermissionState("camera"),
+            microphone: await getPermissionState("microphone"),
+          },
+          screen: {
+            width: screen.width,
+            height: screen.height,
+            availWidth: screen.availWidth,
+            availHeight: screen.availHeight,
+            colorDepth: screen.colorDepth,
+            pixelDepth: screen.pixelDepth,
+          },
+          viewport: {
+            innerWidth,
+            innerHeight,
+            devicePixelRatio,
+          },
+        };
+      }
+
+      async function enumerateDevices() {
+        if (!navigator.mediaDevices?.enumerateDevices) {
+          throw new Error("navigator.mediaDevices.enumerateDevices is unavailable.");
+        }
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        state.devices = devices.map((device) => ({
+          kind: device.kind,
+          label: device.label,
+          deviceId: device.deviceId,
+          groupId: device.groupId,
+          constructorName: device.constructor?.name,
+        }));
+
+        els.device.innerHTML = "";
+        const videoInputs = state.devices.filter(
+          (device) => device.kind === "videoinput",
+        );
+
+        for (const device of videoInputs) {
+          const option = document.createElement("option");
+          option.value = device.deviceId;
+          option.textContent = device.label || `(unlabeled ${device.deviceId})`;
+          els.device.append(option);
+        }
+
+        if (!videoInputs.length) {
+          const option = document.createElement("option");
+          option.textContent = "No video input detected";
+          els.device.append(option);
+        }
+
+        await renderReport();
+      }
+
+      function stopCamera() {
+        if (state.stream) {
+          state.stream.getTracks().forEach((track) => track.stop());
+        }
+
+        state.stream = null;
+        state.track = null;
+        state.observedFrames = 0;
+        state.observedStartedAt = 0;
+        state.observedFps = null;
+        els.preview.srcObject = null;
+        setStatus("Camera stopped.");
+        renderReport();
+      }
+
+      function observePreviewFps() {
+        state.observedFrames = 0;
+        state.observedStartedAt = performance.now();
+        state.observedFps = null;
+
+        if (!els.preview.requestVideoFrameCallback) {
+          return;
+        }
+
+        const tick = () => {
+          if (!state.stream) {
+            return;
+          }
+
+          state.observedFrames += 1;
+          const elapsed = (performance.now() - state.observedStartedAt) / 1000;
+
+          if (elapsed >= 1) {
+            state.observedFps = Number(
+              (state.observedFrames / elapsed).toFixed(2),
+            );
+            renderReport();
+          }
+
+          els.preview.requestVideoFrameCallback(tick);
+        };
+
+        els.preview.requestVideoFrameCallback(tick);
+      }
+
+      async function startCamera() {
+        stopCamera();
+
+        const deviceId = els.device.value;
+        const constraints = {
+          video: deviceId ? { deviceId: { exact: deviceId } } : true,
+          audio: false,
+        };
+
+        setStatus("Requesting camera permission...");
+        state.stream = await navigator.mediaDevices.getUserMedia(constraints);
+        state.track = state.stream.getVideoTracks()[0] || null;
+        els.preview.srcObject = state.stream;
+        observePreviewFps();
+        setStatus("Camera active.");
+        await enumerateDevices();
+      }
+
+      function getTrackReport() {
+        if (!state.track) {
+          return null;
+        }
+
+        const track = state.track;
+        return {
+          label: track.label,
+          id: track.id,
+          kind: track.kind,
+          enabled: track.enabled,
+          muted: track.muted,
+          readyState: track.readyState,
+          contentHint: track.contentHint,
+          settings: plain(track.getSettings?.()),
+          capabilities: plain(track.getCapabilities?.()),
+          constraints: plain(track.getConstraints?.()),
+          observedPreviewFps: state.observedFps,
+        };
+      }
+
+      async function renderReport() {
+        const browser = await collectBrowserInfo();
+        const track = getTrackReport();
+        const videoInputs = state.devices.filter(
+          (device) => device.kind === "videoinput",
+        );
+
+        const summary = {
+          videoInputCount: videoInputs.length,
+          selectedLabel: track?.label || null,
+          selectedWidth: track?.settings?.width || null,
+          selectedHeight: track?.settings?.height || null,
+          selectedFrameRate: track?.settings?.frameRate || null,
+          selectedFacingMode: track?.settings?.facingMode || null,
+          capabilityFacingMode: track?.capabilities?.facingMode || null,
+          observedPreviewFps: track?.observedPreviewFps || null,
+        };
+
+        state.lastReport = {
+          generatedAt: new Date().toISOString(),
+          summary,
+          devices: state.devices,
+          track,
+          browser,
+        };
+
+        writeJson(els.summary, summary);
+        writeJson(els.devices, state.devices);
+        writeJson(els.track, track || {});
+        writeJson(els.browser, browser);
+        writeJson(els.report, state.lastReport);
+      }
+
+      els.refresh.addEventListener("click", async () => {
+        try {
+          setStatus("Refreshing devices...");
+          await enumerateDevices();
+          setStatus("Devices refreshed.");
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      });
+
+      els.start.addEventListener("click", async () => {
+        try {
+          await startCamera();
+        } catch (error) {
+          stopCamera();
+          setStatus(`${error.name || "Error"}: ${error.message}`, true);
+        }
+      });
+
+      els.stop.addEventListener("click", stopCamera);
+
+      els.copy.addEventListener("click", async () => {
+        await navigator.clipboard.writeText(
+          JSON.stringify(state.lastReport, null, 2),
+        );
+        setStatus("Copied report JSON.");
+      });
+
+      window.addEventListener("beforeunload", stopCamera);
+
+      enumerateDevices().catch((error) => {
+        setStatus(error.message, true);
+        renderReport();
+      });
+    </script>
+  </body>
+</html>
