@@ -491,11 +491,13 @@ The Gstreamer pipeline is started when the client shares their webcam and is sto
   "capture.webcam.device",
   "capture.webcam.width",
   "capture.webcam.height",
+  "capture.webcam.rate",
 ]} comments={false} />
 
 - <Def id="webcam.enabled" /> is a boolean value that determines whether the webcam capture is enabled or not.
 - <Def id="webcam.device" /> is the name of the [video4linux device](https://www.kernel.org/doc/html/v4.12/media/v4l-drivers/index.html) that will be used as a virtual webcam.
 - <Def id="webcam.width" /> and <Def id="webcam.height" /> are the resolution of the virtual webcam feed.
+- <Def id="webcam.rate" /> is the framerate of the virtual webcam feed. It is expressed as a fraction of frames per second, for example, `30/1` means 30 frames per second.
 
 In order to use the webcam feature, the server must have the [v4l2loopback](https://github.com/v4l2loopback/v4l2loopback) kernel module installed and loaded. The module can be loaded using the following command:
 

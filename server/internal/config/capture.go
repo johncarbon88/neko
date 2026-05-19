@@ -52,6 +52,7 @@ type Capture struct {
 	WebcamDevice  string
 	WebcamWidth   int
 	WebcamHeight  int
+	WebcamRate    string
 
 	MicrophoneEnabled bool
 	MicrophoneDevice  string
@@ -173,6 +174,11 @@ func (Capture) Init(cmd *cobra.Command) error {
 
 	cmd.PersistentFlags().Int("capture.webcam.height", 720, "webcam stream height")
 	if err := viper.BindPFlag("capture.webcam.height", cmd.PersistentFlags().Lookup("capture.webcam.height")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("capture.webcam.rate", "30/1", "webcam stream frame rate")
+	if err := viper.BindPFlag("capture.webcam.rate", cmd.PersistentFlags().Lookup("capture.webcam.rate")); err != nil {
 		return err
 	}
 
@@ -430,6 +436,7 @@ func (s *Capture) Set() {
 	s.WebcamDevice = viper.GetString("capture.webcam.device")
 	s.WebcamWidth = viper.GetInt("capture.webcam.width")
 	s.WebcamHeight = viper.GetInt("capture.webcam.height")
+	s.WebcamRate = viper.GetString("capture.webcam.rate")
 
 	// microphone
 	s.MicrophoneEnabled = viper.GetBool("capture.microphone.enabled")

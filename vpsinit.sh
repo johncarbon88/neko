@@ -77,3 +77,5 @@ v4l2-ctl --list-devices || true
 
 # Pull image
 docker pull ghcr.io/johncarbon88/neko/webcam-google-chrome:webcam
+
+docker run -p 80:8080 -d --name speedtest --rm ghcr.io/librespeed/speedtest

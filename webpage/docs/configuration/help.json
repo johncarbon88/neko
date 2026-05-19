@@ -226,6 +226,16 @@
     "key": [
       "capture",
       "webcam",
+      "rate"
+    ],
+    "type": "string",
+    "defaultValue": "30/1",
+    "description": "webcam stream frame rate"
+  },
+  {
+    "key": [
+      "capture",
+      "webcam",
       "width"
     ],
     "type": "int",

@@ -21,6 +21,7 @@
       --capture.webcam.device string                  v4l2sink device used for webcam (default "/dev/video0")
       --capture.webcam.enabled                        enable webcam stream
       --capture.webcam.height int                     webcam stream height (default 720)
+      --capture.webcam.rate string                    webcam stream frame rate (default "30/1")
       --capture.webcam.width int                      webcam stream width (default 1280)
       --desktop.display string                        X display to use for desktop sharing
       --desktop.file_chooser_dialog                   whether to handle file chooser dialog externally

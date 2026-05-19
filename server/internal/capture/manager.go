@@ -151,7 +151,7 @@ func New(desktop types.DesktopManager, config *config.Capture) *CaptureManagerCt
 				"! videoconvert " +
 				"! videorate " +
 				"! videoscale " +
-				fmt.Sprintf("! video/x-raw,width=%d,height=%d ", config.WebcamWidth, config.WebcamHeight) +
+				fmt.Sprintf("! video/x-raw,width=%d,height=%d,framerate=%s ", config.WebcamWidth, config.WebcamHeight, config.WebcamRate) +
 				"! identity drop-allocation=true " +
 				fmt.Sprintf("! v4l2sink sync=false device=%s", config.WebcamDevice),
 			// TODO: Test this pipeline.
@@ -162,7 +162,7 @@ func New(desktop types.DesktopManager, config *config.Capture) *CaptureManagerCt
 				"! videoconvert " +
 				"! videorate " +
 				"! videoscale " +
-				fmt.Sprintf("! video/x-raw,width=%d,height=%d ", config.WebcamWidth, config.WebcamHeight) +
+				fmt.Sprintf("! video/x-raw,width=%d,height=%d,framerate=%s ", config.WebcamWidth, config.WebcamHeight, config.WebcamRate) +
 				"! identity drop-allocation=true " +
 				fmt.Sprintf("! v4l2sink sync=false device=%s", config.WebcamDevice),
 			// TODO: Test this pipeline.
@@ -173,7 +173,7 @@ func New(desktop types.DesktopManager, config *config.Capture) *CaptureManagerCt
 				"! videoconvert " +
 				"! videorate " +
 				"! videoscale " +
-				fmt.Sprintf("! video/x-raw,width=%d,height=%d ", config.WebcamWidth, config.WebcamHeight) +
+				fmt.Sprintf("! video/x-raw,width=%d,height=%d,framerate=%s ", config.WebcamWidth, config.WebcamHeight, config.WebcamRate) +
 				"! identity drop-allocation=true " +
 				fmt.Sprintf("! v4l2sink sync=false device=%s", config.WebcamDevice),
 		}, "webcam"),
