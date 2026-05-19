@@ -1,16 +1,9 @@
 name: Build and Deploy Webpage to GitHub Pages
 
 on:
-  # Runs on pushes targeting the default branch
-  push:
-    branches:
-      - master
-    paths:
-      - webpage/**
-      - .github/workflows/webpage_build.yml
-      - .github/workflows/webpage_deploy.yml
-
-  # Allows you to run this workflow manually from the Actions tab
+  # Allows the upstream Docusaurus site to be deployed manually if needed.
+  # Keep this off push in forks so it does not overwrite the standalone
+  # webcam diagnostics GitHub Pages deployment.
   workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
